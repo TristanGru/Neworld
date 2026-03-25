@@ -12,3 +12,7 @@ loresmith/src-tauri/target/
 # OS
 .DS_Store
 Thumbs.db
+
+# Personal/local files
+Gemini_Generated_Image_*.png
+Neworld PRD.md
