@@ -1,0 +1,15 @@
+{
+  "--color-primary": "#7c3aed",
+  "--color-primary-hover": "#6d28d9",
+  "--color-secondary": "#c4b5fd",
+  "--color-accent": "#f59e0b",
+  "--color-bg": "#1a1625",
+  "--color-bg-panel": "#231e30",
+  "--color-bg-sidebar": "#1e1929",
+  "--color-border": "#3d3453",
+  "--color-text": "#e2d9f3",
+  "--color-text-muted": "#9d8ec4",
+  "--color-entity-mark": "#c084fc",
+  "--font-prose": "'Palatino Linotype', 'Book Antiqua', Palatino, serif",
+  "--font-ui": "'Segoe UI', system-ui, sans-serif"
+}

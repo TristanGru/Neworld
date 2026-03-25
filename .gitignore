@@ -1,0 +1,14 @@
+# Dependencies
+loresmith/node_modules/
+node_modules/
+
+# Build output
+loresmith/dist/
+loresmith/src-tauri/target/
+
+# Claude Code project settings (local/personal)
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
