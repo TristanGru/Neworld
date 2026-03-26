@@ -92,6 +92,7 @@ struct ChatRequest {
 struct ChatChunk {
     message: Option<ChatMessageContent>,
     done: Option<bool>,
+    error: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -223,6 +224,17 @@ pub async fn stream_chat(
     let resp = client.post(&url).json(&req).send().await
         .map_err(|_| LoreError::OllamaUnreachable)?;
 
+    // Surface non-200 HTTP errors immediately
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        let msg = serde_json::from_str::<serde_json::Value>(&body)
+            .ok()
+            .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(String::from))
+            .unwrap_or_else(|| format!("Ollama returned HTTP {}", status));
+        return Err(LoreError::IoError(msg));
+    }
+
     let mut stream = resp.bytes_stream();
 
     while let Some(chunk) = stream.next().await {
@@ -232,6 +244,10 @@ pub async fn stream_chat(
         for line in text.lines() {
             if line.trim().is_empty() { continue; }
             if let Ok(data) = serde_json::from_str::<ChatChunk>(line) {
+                // Ollama streams {"error": "..."} on model-not-found and similar
+                if let Some(err) = data.error {
+                    return Err(LoreError::IoError(err));
+                }
                 if let Some(token) = data.message.and_then(|m| m.content) {
                     if !token.is_empty() {
                         let _ = app_handle.emit(&token_event, serde_json::json!({ "token": token }));

@@ -260,14 +260,29 @@ pub async fn get_ai_settings(
     let embed_model = state.ollama_embedding_model.clone();
 
     // Fetch all installed models and exclude the embedding model (not useful for chat)
-    let available_models = ollama::check_health(&state.ollama_base_url)
+    let available_models: Vec<String> = ollama::check_health(&state.ollama_base_url)
         .await
         .unwrap_or_default()
         .into_iter()
         .filter(|m| !m.starts_with(&embed_model))
         .collect();
 
-    Ok(AiSettings { current_model, available_models })
+    // If the saved model name doesn't exactly match any installed model,
+    // try to find one that starts with the saved name (e.g. "llama3" -> "llama3:latest")
+    // and update the state so subsequent queries use the real name.
+    let resolved = if available_models.iter().any(|m| m == &current_model) {
+        current_model
+    } else {
+        let fallback = available_models.iter()
+            .find(|m| m.starts_with(&current_model) || current_model.starts_with(m.as_str()))
+            .cloned()
+            .unwrap_or(current_model);
+        let mut m = state.ollama_model.lock().unwrap();
+        *m = fallback.clone();
+        fallback
+    };
+
+    Ok(AiSettings { current_model: resolved, available_models })
 }
 
 #[tauri::command]
