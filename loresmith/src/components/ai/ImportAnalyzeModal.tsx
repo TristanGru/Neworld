@@ -14,6 +14,7 @@ interface ImportedEntity {
   category: string;
   name: string;
   fields: Record<string, string>;
+  action: 'created' | 'updated';
 }
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -51,7 +52,7 @@ export default function ImportAnalyzeModal({ onClose }: Props) {
 
     try {
       const imported = await ipc.analyzeAndImport(project.id, writing, notes);
-      setResults(imported);
+      setResults(imported as ImportedEntity[]);
       setPhase('results');
 
       // Refresh entity store so World view shows new entries immediately
@@ -65,7 +66,12 @@ export default function ImportAnalyzeModal({ onClose }: Props) {
   }
 
   function handleDone() {
-    addToast(`${results.length} ${results.length === 1 ? 'entity' : 'entities'} added to your world`, 'success');
+    const created = results.filter((r) => r.action === 'created').length;
+    const updated = results.filter((r) => r.action === 'updated').length;
+    const parts = [];
+    if (created) parts.push(`${created} created`);
+    if (updated) parts.push(`${updated} updated`);
+    addToast(parts.join(', ') + ' in your world', 'success');
     onClose();
   }
 
@@ -323,27 +329,33 @@ export default function ImportAnalyzeModal({ onClose }: Props) {
                 </div>
               ) : (
                 <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        padding: '4px 10px',
-                        borderRadius: 99,
-                        background: 'var(--color-primary-dim)',
-                        border: '1px solid rgba(201,145,58,0.2)',
-                      }}
-                    >
-                      <Icon name="check" size={11} strokeWidth={2.5} style={{ color: 'var(--color-primary)' }} />
-                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-primary)' }}>
-                        {results.length} {results.length === 1 ? 'entity' : 'entities'} imported
-                      </span>
-                    </div>
-                    <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                      Now visible in your World view
-                    </span>
-                  </div>
+                  {(() => {
+                    const created = results.filter((r) => r.action === 'created').length;
+                    const updated = results.filter((r) => r.action === 'updated').length;
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        {created > 0 && (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 99, background: 'var(--color-primary-dim)', border: '1px solid rgba(201,145,58,0.2)' }}>
+                            <Icon name="plus" size={11} strokeWidth={2.5} style={{ color: 'var(--color-primary)' }} />
+                            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-primary)' }}>
+                              {created} new
+                            </span>
+                          </div>
+                        )}
+                        {updated > 0 && (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 99, background: 'rgba(90,138,85,0.15)', border: '1px solid rgba(90,138,85,0.3)' }}>
+                            <Icon name="check" size={11} strokeWidth={2.5} style={{ color: '#5a8a55' }} />
+                            <span style={{ fontSize: 12, fontWeight: 600, color: '#5a8a55' }}>
+                              {updated} updated
+                            </span>
+                          </div>
+                        )}
+                        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                          Visible in your World view
+                        </span>
+                      </div>
+                    );
+                  })()}
 
                   {Object.entries(grouped).map(([category, entities]) => (
                     <div key={category}>
@@ -373,12 +385,26 @@ export default function ImportAnalyzeModal({ onClose }: Props) {
                                 padding: '10px 12px',
                                 borderRadius: 8,
                                 background: 'var(--color-bg-panel)',
-                                border: '1px solid var(--color-border)',
+                                border: `1px solid ${entity.action === 'updated' ? 'rgba(90,138,85,0.25)' : 'var(--color-border)'}`,
                               }}
                             >
-                              <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text)', margin: '0 0 3px' }}>
-                                {entity.name}
-                              </p>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
+                                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text)', margin: 0, flex: 1 }}>
+                                  {entity.name}
+                                </p>
+                                <span style={{
+                                  fontSize: 9,
+                                  fontWeight: 700,
+                                  padding: '2px 6px',
+                                  borderRadius: 4,
+                                  letterSpacing: '0.05em',
+                                  textTransform: 'uppercase',
+                                  background: entity.action === 'updated' ? 'rgba(90,138,85,0.15)' : 'var(--color-primary-dim)',
+                                  color: entity.action === 'updated' ? '#5a8a55' : 'var(--color-primary)',
+                                }}>
+                                  {entity.action === 'updated' ? 'Updated' : 'New'}
+                                </span>
+                              </div>
                               {fieldEntries.length > 0 && (
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 16px' }}>
                                   {fieldEntries.map(([k, v]) => (

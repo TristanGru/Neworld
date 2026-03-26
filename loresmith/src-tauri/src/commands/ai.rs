@@ -374,6 +374,7 @@ pub struct ImportedEntity {
     pub category: String,
     pub name: String,
     pub fields: serde_json::Value,
+    pub action: String, // "created" or "updated"
 }
 
 #[tauri::command]
@@ -487,19 +488,44 @@ TEXT TO ANALYSE:
                         }
                     }
                 }
-                let structured_data = serde_json::to_string(&fields).unwrap_or_else(|_| "{}".to_string());
+                // Check if an entity with the same name already exists in this category
+                let existing: Option<(String, String)> = conn.query_row(
+                    "SELECT id, structured_data FROM entities \
+                     WHERE project_id = ?1 AND category_id = ?2 AND LOWER(name) = LOWER(?3)",
+                    rusqlite::params![project_id, category_id, name],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+                ).ok();
 
-                let entity_id = uuid::Uuid::new_v4().to_string();
-                conn.execute(
-                    "INSERT INTO entities (id, project_id, category_id, name, aliases, structured_data, notes, created_at, updated_at)
-                     VALUES (?1, ?2, ?3, ?4, '[]', ?5, '', ?6, ?6)",
-                    rusqlite::params![entity_id, project_id, category_id, name, structured_data, now],
-                )?;
+                let (final_fields, action) = if let Some((existing_id, existing_sd)) = existing {
+                    // Merge: start from existing data, overlay non-empty new fields
+                    let mut merged: serde_json::Map<String, serde_json::Value> =
+                        serde_json::from_str(&existing_sd).unwrap_or_default();
+                    for (k, v) in &fields {
+                        merged.insert(k.clone(), v.clone());
+                    }
+                    let merged_sd = serde_json::to_string(&merged).unwrap_or_else(|_| "{}".to_string());
+                    conn.execute(
+                        "UPDATE entities SET structured_data = ?1, updated_at = ?2 WHERE id = ?3",
+                        rusqlite::params![merged_sd, now, existing_id],
+                    )?;
+                    (merged, "updated".to_string())
+                } else {
+                    // Insert new entity
+                    let structured_data = serde_json::to_string(&fields).unwrap_or_else(|_| "{}".to_string());
+                    let entity_id = uuid::Uuid::new_v4().to_string();
+                    conn.execute(
+                        "INSERT INTO entities (id, project_id, category_id, name, aliases, structured_data, notes, created_at, updated_at)
+                         VALUES (?1, ?2, ?3, ?4, '[]', ?5, '', ?6, ?6)",
+                        rusqlite::params![entity_id, project_id, category_id, name, structured_data, now],
+                    )?;
+                    (fields, "created".to_string())
+                };
 
                 imported.push(ImportedEntity {
                     category: category_name.to_string(),
                     name,
-                    fields: serde_json::Value::Object(fields),
+                    fields: serde_json::Value::Object(final_fields),
+                    action,
                 });
             }
         }

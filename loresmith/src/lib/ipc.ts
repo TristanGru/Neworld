@@ -130,7 +130,7 @@ export const ipc = {
 
   // Import
   analyzeAndImport: (project_id: string, writing: string, notes: string) =>
-    invoke<Array<{ category: string; name: string; fields: Record<string, string> }>>(
+    invoke<Array<{ category: string; name: string; fields: Record<string, string>; action: string }>>(
       'analyze_and_import', { projectId: project_id, writing, notes }
     ),
 };
