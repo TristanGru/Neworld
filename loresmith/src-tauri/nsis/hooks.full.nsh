@@ -1,6 +1,10 @@
 !macro NSIS_HOOK_POSTINSTALL
   CreateShortcut "$DESKTOP\Neworld.lnk" "$INSTDIR\Neworld.exe"
 
+  ; Let the user know what they're in for before anything starts
+  MessageBox MB_OK|MB_ICONINFORMATION \
+    "Neworld needs to download AI components the first time it runs.$\r$\n$\r$\n  • Ollama (AI engine) — ~120 MB$\r$\n  • Story Intelligence model — ~4.7 GB$\r$\n  • World Memory model — ~274 MB$\r$\n$\r$\nTotal: about 5 GB. This is a one-time download.$\r$\nNeworld will open automatically when everything is ready."
+
   ; Check if Ollama is already installed
   ReadRegStr $0 HKCU "Software\Ollama" "DisplayName"
   IfErrors InstallOllama OllamaAlreadyInstalled
