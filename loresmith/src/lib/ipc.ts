@@ -114,6 +114,9 @@ export const ipc = {
   saveAiModel: (model: string) =>
     invoke<void>('save_ai_model', { model }),
 
+  pullModel: (model: string) =>
+    invoke<void>('pull_model_direct', { model }),
+
   detectEntities: (project_id: string, prose: string) =>
     invoke<EntityMatch[]>('detect_entities_in_prose', { projectId: project_id, prose }),
 

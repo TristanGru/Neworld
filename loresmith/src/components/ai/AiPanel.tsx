@@ -18,6 +18,15 @@ const PERSONA_NAMES: Record<string, { name: string; icon: string; greeting: stri
   custom:       { name: 'The Lorekeeper',  icon: '📖', greeting: 'I am keeper of your world\'s lore. Ask me anything.' },
 };
 
+// Models recommended for download if not already installed
+const RECOMMENDED_MODELS: { name: string; size: string }[] = [
+  { name: 'llama3.2:3b',  size: '2.0 GB' },
+  { name: 'llama3.2:1b',  size: '1.3 GB' },
+  { name: 'mistral',      size: '4.1 GB' },
+  { name: 'phi3:mini',    size: '2.2 GB' },
+  { name: 'gemma2:2b',    size: '1.6 GB' },
+];
+
 // Known model labels — shown in the picker to help users choose
 const MODEL_LABELS: Record<string, { badge: string; badgeColor: string; description: string }> = {
   'llama3':        { badge: 'Quality',  badgeColor: '#c9913a', description: 'Best answers, slower responses' },
@@ -69,6 +78,9 @@ export default function AiPanel() {
   const [showImport, setShowImport] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
+  const [pullingModel, setPullingModel] = useState<string | null>(null);
+  const [pullProgress, setPullProgress] = useState(0);
+  const unlistenPullRef = useRef<(() => void) | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const unlistenRef = useRef<(() => void) | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -116,6 +128,31 @@ export default function AiPanel() {
     }
   }
 
+  async function pullModel(model: string) {
+    setPullingModel(model);
+    setPullProgress(0);
+    try {
+      unlistenPullRef.current?.();
+      const unlisten = await listen('setup_progress', (event: any) => {
+        const p: number = event.payload?.percent ?? 0;
+        setPullProgress(Math.round(p));
+      });
+      unlistenPullRef.current = unlisten;
+      await ipc.pullModel(model);
+      // Refresh available models list
+      const settings = await ipc.getAiSettings();
+      setAvailableModels(settings.available_models);
+      addToast(`${model} downloaded`, 'success');
+    } catch {
+      addToast(`Failed to pull ${model}`, 'error');
+    } finally {
+      unlistenPullRef.current?.();
+      unlistenPullRef.current = null;
+      setPullingModel(null);
+      setPullProgress(0);
+    }
+  }
+
   async function sendMessage() {
     if (!input.trim() || streaming || !project) return;
 
@@ -148,11 +185,20 @@ export default function AiPanel() {
         });
       });
 
-      const unlistenDone = await listen(doneEvent, () => {
+      const unlistenDone = await listen(doneEvent, (event: any) => {
+        const error: string | undefined = event.payload?.error;
         setMessages((prev) => {
           const updated = [...prev];
           const last = updated[updated.length - 1];
-          if (last?.role === 'assistant') updated[updated.length - 1] = { ...last, streaming: false };
+          if (last?.role === 'assistant') {
+            updated[updated.length - 1] = {
+              ...last,
+              content: error
+                ? `Sorry, I ran into a problem: ${error}`
+                : last.content || "I couldn't generate a response. Please try again.",
+              streaming: false,
+            };
+          }
           return updated;
         });
         setStreaming(false);
@@ -360,9 +406,79 @@ export default function AiPanel() {
                 )}
               </div>
 
+              {/* Recommended models not yet installed */}
+              {(() => {
+                const notInstalled = RECOMMENDED_MODELS.filter(
+                  (r) => !availableModels.some((m) => m === r.name || m.startsWith(r.name + ':'))
+                );
+                if (notInstalled.length === 0) return null;
+                return (
+                  <>
+                    <div style={{ padding: '8px 12px 4px', borderTop: '1px solid var(--color-border)' }}>
+                      <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                        Get More Models
+                      </p>
+                    </div>
+                    <div style={{ padding: '0 6px 6px' }}>
+                      {notInstalled.map((rec) => {
+                        const isPulling = pullingModel === rec.name;
+                        const label = getModelLabel(rec.name);
+                        return (
+                          <div
+                            key={rec.name}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                              padding: '7px 10px',
+                              borderRadius: 7,
+                              border: '1px solid transparent',
+                            }}
+                          >
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {rec.name}
+                              </div>
+                              <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 1 }}>
+                                {isPulling
+                                  ? (pullProgress > 0 ? `Downloading… ${pullProgress}%` : 'Starting download…')
+                                  : `${rec.size}${label ? ` · ${label.description}` : ''}`}
+                              </div>
+                              {isPulling && (
+                                <div style={{ marginTop: 4, height: 2, borderRadius: 2, background: 'var(--color-border)', overflow: 'hidden' }}>
+                                  <div style={{ height: '100%', background: 'var(--color-primary)', width: `${pullProgress}%`, transition: 'width 400ms ease' }} />
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => !isPulling && !pullingModel && pullModel(rec.name)}
+                              disabled={!!pullingModel}
+                              style={{
+                                padding: '4px 10px',
+                                borderRadius: 5,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                background: isPulling ? 'var(--color-primary-dim)' : 'var(--color-primary)',
+                                color: 'var(--color-bg)',
+                                border: 'none',
+                                cursor: pullingModel ? 'not-allowed' : 'pointer',
+                                opacity: pullingModel && !isPulling ? 0.4 : 1,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {isPulling ? '…' : 'Pull'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
+
               <div style={{ padding: '8px 12px', borderTop: '1px solid var(--color-border)' }}>
                 <p style={{ fontSize: 10, color: 'var(--color-text-subtle)', lineHeight: 1.5 }}>
-                  Install more models via <code style={{ background: 'var(--color-bg-input)', padding: '1px 4px', borderRadius: 3, fontSize: 9 }}>ollama pull &lt;model&gt;</code>
+                  Or run <code style={{ background: 'var(--color-bg-input)', padding: '1px 4px', borderRadius: 3, fontSize: 9 }}>ollama pull &lt;model&gt;</code> in a terminal
                 </p>
               </div>
             </div>

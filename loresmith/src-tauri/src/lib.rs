@@ -65,6 +65,7 @@ pub fn run() {
             save_ai_model,
             detect_entities_in_prose,
             analyze_and_import,
+            pull_model_direct,
             // Export
             export_project,
             // Conflicts

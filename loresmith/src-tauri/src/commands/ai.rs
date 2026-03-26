@@ -294,6 +294,15 @@ pub async fn save_ai_model(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn pull_model_direct(
+    model: String,
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), LoreError> {
+    ollama::pull_model(&state.ollama_base_url, &model, &app_handle).await
+}
+
 /// Load persisted settings into AppState — called from the Tauri setup hook.
 pub fn load_persisted_settings(app: &tauri::App) {
     let path = app

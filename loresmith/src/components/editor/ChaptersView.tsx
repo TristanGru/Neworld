@@ -22,6 +22,7 @@ export default function ChaptersView() {
   const [showExport, setShowExport] = useState(false);
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editingTitleValue, setEditingTitleValue] = useState('');
+  const [hoveredChapterId, setHoveredChapterId] = useState<string | null>(null);
 
   const activeChapter = chapters.find((c) => c.id === activeChapterId) ?? null;
 
@@ -162,14 +163,12 @@ export default function ChaptersView() {
                   transition: 'background 100ms ease, border-color 100ms ease, color 100ms ease',
                 }}
                 onMouseEnter={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.background = 'var(--color-primary-muted)';
-                  }
+                  setHoveredChapterId(ch.id);
+                  if (!isActive) e.currentTarget.style.background = 'var(--color-primary-muted)';
                 }}
                 onMouseLeave={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.background = 'transparent';
-                  }
+                  setHoveredChapterId(null);
+                  if (!isActive) e.currentTarget.style.background = 'transparent';
                 }}
               >
                 {editingTitleId === ch.id ? (
@@ -218,28 +217,20 @@ export default function ChaptersView() {
 
                 <button
                   onClick={(e) => { e.stopPropagation(); deleteChapter(ch); }}
-                  title="Delete"
+                  title="Delete chapter"
                   style={{
                     width: 20,
                     height: 20,
                     borderRadius: 4,
                     border: 'none',
-                    background: 'transparent',
+                    background: hoveredChapterId === ch.id ? 'rgba(192,80,64,0.1)' : 'transparent',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: 'transparent',
-                    transition: 'color 100ms ease, background 100ms ease',
-                  }}
-                  className="chapter-delete-btn"
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = '#c05040';
-                    e.currentTarget.style.background = 'rgba(192,80,64,0.1)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = 'transparent';
-                    e.currentTarget.style.background = 'transparent';
+                    color: hoveredChapterId === ch.id ? '#c05040' : 'transparent',
+                    flexShrink: 0,
+                    transition: 'color 120ms ease, background 120ms ease',
                   }}
                 >
                   <Icon name="trash" size={11} />
