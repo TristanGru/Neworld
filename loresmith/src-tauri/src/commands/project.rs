@@ -210,7 +210,9 @@ fn spawn_catchup_indexing(app: AppHandle, project_id: String, folder_path: Strin
                 let aliases: Vec<String> = serde_json::from_str(&row.get::<_, String>(2)?).unwrap_or_default();
                 let sd: serde_json::Value = serde_json::from_str(&row.get::<_, String>(3)?).unwrap_or_default();
                 Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, aliases, sd, row.get::<_, Option<String>>(4)?))
-            }).unwrap_or_else(|_| Box::new(std::iter::empty())).filter_map(|r| r.ok()).collect()
+            })
+            .map(|rows| rows.filter_map(|r| r.ok()).collect::<Vec<_>>())
+            .unwrap_or_default()
         };
 
         // Index entities
@@ -237,7 +239,9 @@ fn spawn_catchup_indexing(app: AppHandle, project_id: String, folder_path: Strin
             ) { Ok(s) => s, Err(_) => return };
             stmt.query_map([&project_id], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-            }).unwrap_or_else(|_| Box::new(std::iter::empty())).filter_map(|r| r.ok()).collect()
+            })
+            .map(|rows| rows.filter_map(|r| r.ok()).collect::<Vec<_>>())
+            .unwrap_or_default()
         };
 
         // Index chapters
