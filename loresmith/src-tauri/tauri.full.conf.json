@@ -38,8 +38,7 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "installerHooks": "./nsis/hooks.full.nsh",
-        "installSize": 5500000
+        "installerHooks": "./nsis/hooks.full.nsh"
       }
     }
   }
