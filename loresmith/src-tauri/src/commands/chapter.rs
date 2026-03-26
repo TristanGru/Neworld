@@ -1,11 +1,33 @@
 use std::path::Path;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 
 use crate::db::schema::{Chapter, Scene, VersionSnapshot};
 use crate::errors::LoreError;
 use crate::state::AppState;
+
+fn spawn_chapter_indexing(app: AppHandle, project_id: String, chapter_id: String, content: String) {
+    if content.trim().is_empty() { return; }
+    let base_url = app.state::<AppState>().ollama_base_url.clone();
+    let embed_model = app.state::<AppState>().ollama_embedding_model.clone();
+    tokio::spawn(async move {
+        let chunks = crate::rag::chunk_text(&content);
+        let mut indexed: Vec<(usize, String, Vec<f32>)> = Vec::new();
+        for (i, chunk) in chunks.iter().enumerate() {
+            if let Ok(embedding) = crate::ollama::embed_text(&base_url, &embed_model, chunk).await {
+                indexed.push((i, chunk.clone(), embedding));
+            }
+        }
+        if !indexed.is_empty() {
+            let state = app.state::<AppState>();
+            let conns = state.connections.lock().unwrap();
+            if let Some(conn) = conns.get(&project_id) {
+                let _ = crate::rag::upsert_prose_embeddings(conn, &project_id, &chapter_id, &content, &indexed);
+            }
+        }
+    });
+}
 
 const MAX_SNAPSHOTS: usize = 50;
 
@@ -61,6 +83,7 @@ pub async fn save_chapter(
     chapter_id: String,
     content: String,
     folder_path: String,
+    app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<SaveChapterResult, LoreError> {
     let project_id = find_chapter_project(&chapter_id, &state)?;
@@ -124,6 +147,9 @@ pub async fn save_chapter(
     } else {
         false
     };
+
+    drop(conns);
+    spawn_chapter_indexing(app_handle, project_id.clone(), chapter_id.clone(), content.clone());
 
     Ok(SaveChapterResult { word_count, snapshot_created })
 }

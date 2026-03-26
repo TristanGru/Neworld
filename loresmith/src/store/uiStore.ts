@@ -13,6 +13,12 @@ export interface SetupProgress {
   percent: number;
 }
 
+export interface AiMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  streaming?: boolean;
+}
+
 interface UIState {
   currentView: View;
   activeChapterId: string | null;
@@ -24,6 +30,7 @@ interface UIState {
   toasts: Toast[];
   setupComplete: boolean;
   setupProgress: SetupProgress | null;
+  aiMessages: Record<string, AiMessage[]>;
 
   setView: (view: View) => void;
   setActiveChapter: (id: string | null) => void;
@@ -34,6 +41,7 @@ interface UIState {
   setShowTutorial: (show: boolean) => void;
   setSetupComplete: (complete: boolean) => void;
   setSetupProgress: (progress: SetupProgress | null) => void;
+  setAiMessages: (projectId: string, messages: AiMessage[]) => void;
   addToast: (message: string, type?: Toast['type']) => void;
   removeToast: (id: string) => void;
 }
@@ -51,6 +59,7 @@ export const useUIStore = create<UIState>((set) => ({
   toasts: [],
   setupComplete: false,
   setupProgress: null,
+  aiMessages: {},
 
   setView: (view) => set({ currentView: view }),
   setActiveChapter: (id) => set({ activeChapterId: id }),
@@ -64,6 +73,8 @@ export const useUIStore = create<UIState>((set) => ({
   },
   setSetupComplete: (complete) => set({ setupComplete: complete }),
   setSetupProgress: (progress) => set({ setupProgress: progress }),
+  setAiMessages: (projectId, messages) =>
+    set((s) => ({ aiMessages: { ...s.aiMessages, [projectId]: messages } })),
 
   addToast: (message, type = 'info') => {
     const id = Math.random().toString(36).slice(2);

@@ -63,10 +63,17 @@ pub async fn check_ollama(
     }
 }
 
+#[derive(Deserialize)]
+pub struct HistoryMessage {
+    pub role: String,
+    pub content: String,
+}
+
 #[tauri::command]
 pub async fn ai_query(
     project_id: String,
     query: String,
+    history: Vec<HistoryMessage>,
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), LoreError> {
@@ -78,21 +85,40 @@ pub async fn ai_query(
     let model = state.ollama_model.lock().unwrap().clone();
     let embedding_model = state.ollama_embedding_model.clone();
 
-    // Embed the query
-    let query_embedding = ollama::embed_text(&base_url, &embedding_model, &query).await
-        .map_err(|_| LoreError::EmbeddingFailed("Query embedding failed".to_string()))?;
-
-    // Retrieve relevant chunks
-    let chunks = {
+    // Check if there is anything indexed before paying the cost of embedding
+    let has_chunks = {
         let conns = state.connections.lock().unwrap();
         if let Some(conn) = conns.get(&project_id) {
-            rag::retrieve_chunks(conn, &project_id, &query_embedding, 8)?
+            conn.query_row(
+                "SELECT COUNT(*) FROM embedding_documents WHERE project_id = ?1 AND embedding IS NOT NULL",
+                [&project_id],
+                |row| row.get::<_, i64>(0),
+            ).unwrap_or(0) > 0
         } else {
             return Err(LoreError::NotANeworldProject);
         }
     };
 
-    // Get project genre for system prompt
+    // Only embed + retrieve when there is indexed content to search
+    let context = if has_chunks {
+        let query_embedding = ollama::embed_text(&base_url, &embedding_model, &query).await
+            .unwrap_or_default();
+        if !query_embedding.is_empty() {
+            let conns = state.connections.lock().unwrap();
+            if let Some(conn) = conns.get(&project_id) {
+                rag::retrieve_chunks(conn, &project_id, &query_embedding, 8)
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|c| format!("[{}]: {}", c.source_type, c.content))
+                    .collect::<Vec<_>>()
+                    .join("\n\n")
+            } else { String::new() }
+        } else { String::new() }
+    } else {
+        String::new()
+    };
+
+    // Get project genre
     let genre = {
         let conns = state.connections.lock().unwrap();
         if let Some(conn) = conns.get(&project_id) {
@@ -100,43 +126,55 @@ pub async fn ai_query(
                 "SELECT genre FROM projects WHERE id = ?1", [&project_id],
                 |row| row.get::<_, String>(0)
             ).unwrap_or_else(|_| "unknown".to_string())
-        } else {
-            "unknown".to_string()
-        }
+        } else { "unknown".to_string() }
     };
 
-    // Build RAG prompt
-    let context = chunks.iter()
-        .map(|c| format!("[{}]: {}", c.source_type, c.content))
-        .collect::<Vec<_>>()
-        .join("\n\n");
+    let persona = match genre.as_str() {
+        "fantasy"     => "the Sage",
+        "sci-fi"      => "the Oracle",
+        "horror"      => "the Chronicler",
+        "romance"     => "the Muse",
+        "mystery"     => "the Detective",
+        "historical"  => "the Archivist",
+        "contemporary"=> "the Confidant",
+        _             => "the Lorekeeper",
+    };
 
-    let system_prompt = format!(
-        "You are a knowledgeable assistant for a {} novel project. \
-        Answer questions based ONLY on the provided context about the writer's world. \
-        If the context doesn't contain enough information to answer, say \"I don't know\" rather than guessing. \
-        Be concise and helpful.",
-        genre
-    );
-
-    let full_prompt = if context.is_empty() {
-        format!("{}\n\nQuestion: {}", system_prompt, query)
+    // Build messages for chat API — system + history + current query with any RAG context
+    let system_content = if context.is_empty() {
+        format!(
+            "You are {}, a dedicated expert on this writer's world. \
+            You live and breathe the details of their {} story. \
+            Be concise, insightful, and deeply supportive of their creative vision.",
+            persona, genre
+        )
     } else {
-        format!("{}\n\nContext from the world:\n{}\n\nQuestion: {}", system_prompt, context, query)
+        format!(
+            "You are {}, a dedicated expert on this writer's world. \
+            You have deep knowledge of every character, location, and event in their {} story. \
+            Answer questions using the world knowledge below. Be concise and insightful.\
+            \n\nWorld knowledge:\n{}",
+            persona, genre, context
+        )
     };
 
-    // Stream response
+    let mut messages: Vec<ollama::ChatMessage> = vec![
+        ollama::ChatMessage { role: "system".to_string(), content: system_content },
+    ];
+
+    for h in history {
+        messages.push(ollama::ChatMessage { role: h.role, content: h.content });
+    }
+
+    messages.push(ollama::ChatMessage { role: "user".to_string(), content: query });
+
     let done_event = format!("ai_done_{}", project_id);
     let token_event = format!("ai_token_{}", project_id);
 
     tokio::spawn(async move {
-        match ollama::stream_completion(&base_url, &model, &full_prompt, token_event.clone(), app_handle.clone()).await {
-            Ok(_) => {
-                let _ = app_handle.emit(&done_event, ());
-            }
-            Err(e) => {
-                let _ = app_handle.emit(&done_event, serde_json::json!({"error": e.to_string()}));
-            }
+        match ollama::stream_chat(&base_url, &model, messages, token_event.clone(), app_handle.clone()).await {
+            Ok(_) => { let _ = app_handle.emit(&done_event, ()); }
+            Err(e) => { let _ = app_handle.emit(&done_event, serde_json::json!({"error": e.to_string()})); }
         }
     });
 

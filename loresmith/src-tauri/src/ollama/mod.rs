@@ -74,6 +74,30 @@ pub async fn pull_model(
     Ok(())
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ChatMessage {
+    pub role: String,
+    pub content: String,
+}
+
+#[derive(Serialize)]
+struct ChatRequest {
+    model: String,
+    messages: Vec<ChatMessage>,
+    stream: bool,
+}
+
+#[derive(Deserialize)]
+struct ChatChunk {
+    message: Option<ChatMessageContent>,
+    done: Option<bool>,
+}
+
+#[derive(Deserialize)]
+struct ChatMessageContent {
+    content: Option<String>,
+}
+
 #[derive(Serialize)]
 struct GenerateRequest {
     model: String,
@@ -172,6 +196,50 @@ pub async fn generate_completion(
         .map_err(|e| LoreError::IoError(e.to_string()))?;
 
     Ok(data.response)
+}
+
+pub async fn stream_chat(
+    base_url: &str,
+    model: &str,
+    messages: Vec<ChatMessage>,
+    token_event: String,
+    app_handle: AppHandle,
+) -> Result<(), LoreError> {
+    use futures_util::StreamExt;
+
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(300))
+        .build()
+        .map_err(|_| LoreError::OllamaUnreachable)?;
+
+    let url = format!("{}/api/chat", base_url);
+    let req = ChatRequest { model: model.to_string(), messages, stream: true };
+
+    let resp = client.post(&url).json(&req).send().await
+        .map_err(|_| LoreError::OllamaUnreachable)?;
+
+    let mut stream = resp.bytes_stream();
+
+    while let Some(chunk) = stream.next().await {
+        let bytes = chunk.map_err(|e| LoreError::IoError(e.to_string()))?;
+        let text = String::from_utf8_lossy(&bytes);
+
+        for line in text.lines() {
+            if line.trim().is_empty() { continue; }
+            if let Ok(data) = serde_json::from_str::<ChatChunk>(line) {
+                if let Some(token) = data.message.and_then(|m| m.content) {
+                    if !token.is_empty() {
+                        let _ = app_handle.emit(&token_event, serde_json::json!({ "token": token }));
+                    }
+                }
+                if data.done.unwrap_or(false) {
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 pub async fn stream_completion(

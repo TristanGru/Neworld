@@ -1,5 +1,5 @@
 use std::path::Path;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 
@@ -116,6 +116,7 @@ pub struct OpenProjectResult {
 #[tauri::command]
 pub async fn open_project(
     folder_path: String,
+    app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<OpenProjectResult, LoreError> {
     let path = Path::new(&folder_path);
@@ -179,12 +180,89 @@ pub async fn open_project(
         conns.insert(project_id, conn);
     }
 
+    // Background: index any entities/chapters that have no embeddings yet
+    spawn_catchup_indexing(app_handle, project.id.clone(), folder_path.clone());
+
     Ok(OpenProjectResult {
         project,
         chapters,
         entity_counts,
         folder_path,
     })
+}
+
+fn spawn_catchup_indexing(app: AppHandle, project_id: String, folder_path: String) {
+    let base_url = app.state::<AppState>().ollama_base_url.clone();
+    let embed_model = app.state::<AppState>().ollama_embedding_model.clone();
+    tokio::spawn(async move {
+        // Collect unindexed entities
+        let unindexed_entities: Vec<(String, String, Vec<String>, serde_json::Value, Option<String>)> = {
+            let state = app.state::<AppState>();
+            let conns = state.connections.lock().unwrap();
+            let Some(conn) = conns.get(&project_id) else { return; };
+            let mut stmt = match conn.prepare(
+                "SELECT e.id, e.name, e.aliases, e.structured_data, e.notes \
+                 FROM entities e \
+                 LEFT JOIN embedding_documents ed ON ed.source_type='entity' AND ed.source_id=e.id \
+                 WHERE e.project_id=?1 AND ed.id IS NULL"
+            ) { Ok(s) => s, Err(_) => return };
+            stmt.query_map([&project_id], |row| {
+                let aliases: Vec<String> = serde_json::from_str(&row.get::<_, String>(2)?).unwrap_or_default();
+                let sd: serde_json::Value = serde_json::from_str(&row.get::<_, String>(3)?).unwrap_or_default();
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, aliases, sd, row.get::<_, Option<String>>(4)?))
+            }).unwrap_or_else(|_| Box::new(std::iter::empty())).filter_map(|r| r.ok()).collect()
+        };
+
+        // Index entities
+        for (eid, name, aliases, sd, notes) in unindexed_entities {
+            let text = crate::commands::entity::build_entity_text_pub(&name, &aliases, &sd, &notes);
+            if let Ok(embedding) = crate::ollama::embed_text(&base_url, &embed_model, &text).await {
+                let state = app.state::<AppState>();
+                let conns = state.connections.lock().unwrap();
+                if let Some(conn) = conns.get(&project_id) {
+                    let _ = crate::rag::upsert_entity_embedding(conn, &project_id, &eid, &text, &embedding);
+                }
+            }
+        }
+
+        // Collect unindexed chapters (prose file path + chapter id)
+        let unindexed_chapters: Vec<(String, String)> = {
+            let state = app.state::<AppState>();
+            let conns = state.connections.lock().unwrap();
+            let Some(conn) = conns.get(&project_id) else { return; };
+            let mut stmt = match conn.prepare(
+                "SELECT c.id, c.prose_file FROM chapters c \
+                 LEFT JOIN embedding_documents ed ON ed.source_type='prose' AND ed.source_id=c.id \
+                 WHERE c.project_id=?1 AND ed.id IS NULL AND c.word_count > 0"
+            ) { Ok(s) => s, Err(_) => return };
+            stmt.query_map([&project_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            }).unwrap_or_else(|_| Box::new(std::iter::empty())).filter_map(|r| r.ok()).collect()
+        };
+
+        // Index chapters
+        for (chapter_id, prose_file) in unindexed_chapters {
+            let prose_path = Path::new(&folder_path).join(&prose_file);
+            let content = match std::fs::read_to_string(&prose_path) {
+                Ok(c) if !c.trim().is_empty() => c,
+                _ => continue,
+            };
+            let chunks = crate::rag::chunk_text(&content);
+            let mut indexed: Vec<(usize, String, Vec<f32>)> = Vec::new();
+            for (i, chunk) in chunks.iter().enumerate() {
+                if let Ok(embedding) = crate::ollama::embed_text(&base_url, &embed_model, chunk).await {
+                    indexed.push((i, chunk.clone(), embedding));
+                }
+            }
+            if !indexed.is_empty() {
+                let state = app.state::<AppState>();
+                let conns = state.connections.lock().unwrap();
+                if let Some(conn) = conns.get(&project_id) {
+                    let _ = crate::rag::upsert_prose_embeddings(conn, &project_id, &chapter_id, &content, &indexed);
+                }
+            }
+        }
+    });
 }
 
 fn seed_builtin_categories(conn: &rusqlite::Connection, project_id: &str, now: i64) -> Result<(), LoreError> {

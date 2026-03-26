@@ -1,10 +1,50 @@
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 
 use crate::db::schema::{Entity, EntityCategory, Relationship};
 use crate::errors::LoreError;
 use crate::state::AppState;
+
+pub fn build_entity_text_pub(name: &str, aliases: &[String], structured_data: &serde_json::Value, notes: &Option<String>) -> String {
+    build_entity_text(name, aliases, structured_data, notes)
+}
+
+fn build_entity_text(name: &str, aliases: &[String], structured_data: &serde_json::Value, notes: &Option<String>) -> String {
+    let mut parts = vec![format!("Name: {}", name)];
+    if !aliases.is_empty() {
+        parts.push(format!("Also known as: {}", aliases.join(", ")));
+    }
+    if let Some(obj) = structured_data.as_object() {
+        for (k, v) in obj {
+            if let Some(s) = v.as_str() {
+                if !s.trim().is_empty() {
+                    parts.push(format!("{}: {}", k.replace('_', " "), s));
+                }
+            }
+        }
+    }
+    if let Some(n) = notes {
+        if !n.trim().is_empty() {
+            parts.push(format!("Notes: {}", n));
+        }
+    }
+    parts.join("\n")
+}
+
+fn spawn_entity_indexing(app: AppHandle, project_id: String, entity_id: String, text: String) {
+    let base_url = app.state::<AppState>().ollama_base_url.clone();
+    let embed_model = app.state::<AppState>().ollama_embedding_model.clone();
+    tokio::spawn(async move {
+        if let Ok(embedding) = crate::ollama::embed_text(&base_url, &embed_model, &text).await {
+            let state = app.state::<AppState>();
+            let conns = state.connections.lock().unwrap();
+            if let Some(conn) = conns.get(&project_id) {
+                let _ = crate::rag::upsert_entity_embedding(conn, &project_id, &entity_id, &text, &embedding);
+            }
+        }
+    });
+}
 
 #[tauri::command]
 pub async fn create_entity(
@@ -14,6 +54,7 @@ pub async fn create_entity(
     aliases: Vec<String>,
     structured_data: serde_json::Value,
     notes: Option<String>,
+    app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Entity, LoreError> {
     let name = name.trim().to_string();
@@ -23,7 +64,6 @@ pub async fn create_entity(
     let conns = state.connections.lock().unwrap();
     let conn = conns.get(&project_id).ok_or(LoreError::NotANeworldProject)?;
 
-    // Validate category exists in this project
     let cat_exists: bool = conn.query_row(
         "SELECT COUNT(*) FROM entity_categories WHERE id = ?1 AND project_id = ?2",
         rusqlite::params![category_id, project_id],
@@ -41,6 +81,10 @@ pub async fn create_entity(
         rusqlite::params![id, project_id, category_id, name, aliases_str, data_str, notes, now, now],
     )?;
 
+    let entity_text = build_entity_text(&name, &aliases, &structured_data, &notes);
+    drop(conns);
+    spawn_entity_indexing(app_handle, project_id.clone(), id.clone(), entity_text);
+
     Ok(Entity { id, project_id, category_id, name, aliases, structured_data, notes, created_at: now, updated_at: now })
 }
 
@@ -51,9 +95,9 @@ pub async fn update_entity(
     aliases: Option<Vec<String>>,
     structured_data: Option<serde_json::Value>,
     notes: Option<String>,
+    app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Entity, LoreError> {
-    // First find the entity to get project_id
     let project_id = find_entity_project(&id, &state)?;
 
     let conns = state.connections.lock().unwrap();
@@ -83,7 +127,11 @@ pub async fn update_entity(
             rusqlite::params![notes, now, id])?;
     }
 
-    get_entity_by_id(conn, &id)
+    let entity = get_entity_by_id(conn, &id)?;
+    let entity_text = build_entity_text(&entity.name, &entity.aliases, &entity.structured_data, &entity.notes);
+    drop(conns);
+    spawn_entity_indexing(app_handle, project_id.clone(), id.clone(), entity_text);
+    Ok(entity)
 }
 
 fn find_entity_project(entity_id: &str, state: &State<'_, AppState>) -> Result<String, LoreError> {

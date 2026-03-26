@@ -99,8 +99,8 @@ export const ipc = {
   checkOllama: () =>
     invoke<{ available: boolean; models: string[] }>('check_ollama'),
 
-  aiQuery: (project_id: string, query: string) =>
-    invoke<void>('ai_query', { projectId: project_id, query }),
+  aiQuery: (project_id: string, query: string, history: { role: string; content: string }[]) =>
+    invoke<void>('ai_query', { projectId: project_id, query, history }),
 
   getAiSuggestions: (project_id: string) =>
     invoke<Array<{ type: string; message: string }>>('get_ai_suggestions', { projectId: project_id }),

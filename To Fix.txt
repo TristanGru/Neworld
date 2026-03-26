@@ -1,0 +1,13 @@
+1. Neworld's AI uses Ollama — a free, fully local AI that runs entirely on your machine. No API keys, no internet required.
+
+Setup steps:
+
+Download and install Ollama from ollama.com
+Open a terminal and run:
+ollama pull llama3
+Also pull an embedding model:
+ollama pull nomic-embed-text
+Make sure Ollama is running (it starts automatically on most systems after install)
+Once Ollama is running, the AI panel will let you ask questions about your world, get writing suggestions, and check story consistency — all powered by your local models.
+
+2.
