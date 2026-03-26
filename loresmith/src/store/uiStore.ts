@@ -31,6 +31,8 @@ interface UIState {
   setupComplete: boolean;
   setupProgress: SetupProgress | null;
   aiMessages: Record<string, AiMessage[]>;
+  currentModel: string;
+  availableModels: string[];
 
   setView: (view: View) => void;
   setActiveChapter: (id: string | null) => void;
@@ -42,6 +44,8 @@ interface UIState {
   setSetupComplete: (complete: boolean) => void;
   setSetupProgress: (progress: SetupProgress | null) => void;
   setAiMessages: (projectId: string, messages: AiMessage[]) => void;
+  setCurrentModel: (model: string) => void;
+  setAvailableModels: (models: string[]) => void;
   addToast: (message: string, type?: Toast['type']) => void;
   removeToast: (id: string) => void;
 }
@@ -60,6 +64,8 @@ export const useUIStore = create<UIState>((set) => ({
   setupComplete: false,
   setupProgress: null,
   aiMessages: {},
+  currentModel: 'llama3',
+  availableModels: [],
 
   setView: (view) => set({ currentView: view }),
   setActiveChapter: (id) => set({ activeChapterId: id }),
@@ -75,6 +81,8 @@ export const useUIStore = create<UIState>((set) => ({
   setSetupProgress: (progress) => set({ setupProgress: progress }),
   setAiMessages: (projectId, messages) =>
     set((s) => ({ aiMessages: { ...s.aiMessages, [projectId]: messages } })),
+  setCurrentModel: (model) => set({ currentModel: model }),
+  setAvailableModels: (models) => set({ availableModels: models }),
 
   addToast: (message, type = 'info') => {
     const id = Math.random().toString(36).slice(2);

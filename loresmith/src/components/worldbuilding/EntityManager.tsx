@@ -5,6 +5,7 @@ import { ipc } from '../../lib/ipc';
 import EntityForm from './EntityForm';
 import EntityProfile from './EntityProfile';
 import CategoryManager from './CategoryManager';
+import Icon from '../common/Icon';
 
 export default function EntityManager() {
   const project = useProjectStore((s) => s.activeProject);
@@ -28,7 +29,6 @@ export default function EntityManager() {
     return matchesCategory && matchesSearch;
   });
 
-  // Load all entities on mount
   useEffect(() => {
     if (!project) return;
     ipc.getEntities(project.id)
@@ -36,115 +36,224 @@ export default function EntityManager() {
       .catch(() => addToast('Failed to load entities', 'error'));
   }, [project?.id]);
 
+  const sidebarItemStyle = (isActive: boolean) => ({
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '7px 10px',
+    borderRadius: 7,
+    border: `1px solid ${isActive ? 'rgba(201,145,58,0.2)' : 'transparent'}`,
+    background: isActive ? 'var(--color-primary-dim)' : 'transparent',
+    color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
+    cursor: 'pointer',
+    fontSize: 12,
+    textAlign: 'left' as const,
+    transition: 'background 100ms ease',
+    fontWeight: isActive ? 600 : 400,
+  });
+
   return (
-    <div className="flex h-full">
-      {/* Category sidebar */}
+    <div style={{ display: 'flex', height: '100%' }}>
+
+      {/* ── Category sidebar ── */}
       <div
-        className="w-48 flex flex-col border-r overflow-hidden"
-        style={{ background: 'var(--color-bg-sidebar)', borderColor: 'var(--color-border)' }}
+        style={{
+          width: 176,
+          minWidth: 176,
+          display: 'flex',
+          flexDirection: 'column',
+          borderRight: '1px solid var(--color-border)',
+          background: 'var(--color-bg-sidebar)',
+          overflow: 'hidden',
+        }}
       >
-        <div className="p-3 flex items-center justify-between border-b text-sm font-semibold"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-          <span>World</span>
+        <div
+          style={{
+            padding: '10px 12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderBottom: '1px solid var(--color-border)',
+          }}
+        >
+          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
+            World
+          </span>
           <button
             onClick={() => setShowCategoryManager(true)}
-            style={{ color: 'var(--color-text-muted)', fontSize: 12 }}
+            title="Manage categories"
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: 5,
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--color-text-muted)',
+              transition: 'color 100ms ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
           >
-            ⚙
+            <Icon name="gear" size={13} strokeWidth={1.5} />
           </button>
         </div>
 
-        <button
-          onClick={() => setSelectedCategoryId(null)}
-          className="mx-2 mt-2 px-3 py-2 rounded-lg text-xs text-left"
-          style={{
-            background: selectedCategoryId === null ? 'var(--color-primary)' : 'transparent',
-            color: selectedCategoryId === null ? 'white' : 'var(--color-text-muted)',
-          }}
-        >
-          All Entries ({entities.length})
-        </button>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '6px 6px' }}>
+          {/* All entries */}
+          <button
+            onClick={() => setSelectedCategoryId(null)}
+            style={sidebarItemStyle(selectedCategoryId === null)}
+            onMouseEnter={(e) => { if (selectedCategoryId !== null) e.currentTarget.style.background = 'var(--color-primary-muted)'; }}
+            onMouseLeave={(e) => { if (selectedCategoryId !== null) e.currentTarget.style.background = 'transparent'; }}
+          >
+            <span style={{ flex: 1 }}>All Entries</span>
+            <span style={{ fontSize: 10, opacity: 0.6 }}>{entities.length}</span>
+          </button>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <div style={{ height: 1, background: 'var(--color-border)', margin: '6px 4px' }} />
+
           {categories.map((cat) => {
             const count = entities.filter((e) => e.category_id === cat.id).length;
+            const isActive = selectedCategoryId === cat.id;
             return (
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategoryId(cat.id)}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-left"
-                style={{
-                  background: selectedCategoryId === cat.id ? 'var(--color-primary)' : 'transparent',
-                  color: selectedCategoryId === cat.id ? 'white' : 'var(--color-text)',
-                }}
+                style={sidebarItemStyle(isActive)}
+                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--color-primary-muted)'; }}
+                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
               >
-                <span>{cat.icon ?? '📄'}</span>
-                <span className="flex-1 truncate">{cat.name}</span>
-                <span className="opacity-60">{count}</span>
+                <span style={{ fontSize: 14 }}>{cat.icon ?? '📄'}</span>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {cat.name}
+                </span>
+                <span style={{ fontSize: 10, opacity: 0.5 }}>{count}</span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Entity list */}
+      {/* ── Entity list ── */}
       <div
-        className="w-64 flex flex-col border-r overflow-hidden"
-        style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+        style={{
+          width: 224,
+          minWidth: 224,
+          display: 'flex',
+          flexDirection: 'column',
+          borderRight: '1px solid var(--color-border)',
+          background: 'var(--color-bg)',
+          overflow: 'hidden',
+        }}
       >
-        <div className="p-3 border-b flex items-center gap-2"
-          style={{ borderColor: 'var(--color-border)' }}>
+        <div
+          style={{
+            padding: '8px 10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            borderBottom: '1px solid var(--color-border)',
+          }}
+        >
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search..."
-            className="flex-1 px-2 py-1 rounded text-xs"
+            placeholder={`Search${selectedCategory ? ` ${selectedCategory.name}` : ''}…`}
             style={{
-              background: 'var(--color-bg-panel)',
+              flex: 1,
+              padding: '6px 10px',
+              borderRadius: 6,
+              fontSize: 12,
+              background: 'var(--color-bg-input)',
               border: '1px solid var(--color-border)',
               color: 'var(--color-text)',
               outline: 'none',
+              transition: 'border-color 120ms ease',
             }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = 'rgba(201,145,58,0.35)')}
+            onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--color-border)')}
           />
           <button
             onClick={() => setShowForm(true)}
-            className="text-lg leading-none"
-            style={{ color: 'var(--color-primary)' }}
-            title={`Add ${selectedCategory?.name ?? 'Entity'}`}
+            title={`Add ${selectedCategory?.name ?? 'entity'}`}
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--color-primary)',
+              transition: 'background 100ms ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-primary-muted)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           >
-            +
+            <Icon name="plus" size={16} strokeWidth={2.5} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <div style={{ flex: 1, overflowY: 'auto', padding: '6px 6px' }}>
           {filteredEntities.map((entity) => {
             const cat = categories.find((c) => c.id === entity.category_id);
+            const isActive = selectedEntityId === entity.id;
             return (
               <button
                 key={entity.id}
                 onClick={() => setSelectedEntityId(entity.id)}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-left"
                 style={{
-                  background: selectedEntityId === entity.id ? 'var(--color-bg-panel)' : 'transparent',
-                  border: selectedEntityId === entity.id ? '1px solid var(--color-border)' : '1px solid transparent',
-                  color: 'var(--color-text)',
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 10px',
+                  marginBottom: 2,
+                  borderRadius: 7,
+                  border: `1px solid ${isActive ? 'var(--color-border-strong)' : 'transparent'}`,
+                  background: isActive ? 'var(--color-bg-panel)' : 'transparent',
+                  color: isActive ? 'var(--color-text)' : 'var(--color-text)',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  textAlign: 'left',
+                  transition: 'background 100ms ease',
                 }}
+                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--color-bg-panel)'; }}
+                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
               >
-                <span>{cat?.icon ?? '📄'}</span>
-                <span className="flex-1 truncate font-medium">{entity.name}</span>
+                <span style={{ fontSize: 13, opacity: 0.7 }}>{cat?.icon ?? '📄'}</span>
+                <span style={{
+                  flex: 1,
+                  fontWeight: isActive ? 600 : 400,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {entity.name}
+                </span>
               </button>
             );
           })}
+
           {filteredEntities.length === 0 && (
-            <p className="text-xs text-center py-8" style={{ color: 'var(--color-text-muted)' }}>
-              No entries yet.
-            </p>
+            <div style={{ padding: '32px 12px', textAlign: 'center' }}>
+              <p style={{ fontSize: 11, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                {search ? `No results for "${search}"` : 'No entries yet.'}
+              </p>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Entity detail */}
-      <div className="flex-1 overflow-y-auto">
+      {/* ── Entity detail ── */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
         {selectedEntity ? (
           <EntityProfile
             entity={selectedEntity}
@@ -152,8 +261,22 @@ export default function EntityManager() {
             onClose={() => setSelectedEntityId(null)}
           />
         ) : (
-          <div className="flex items-center justify-center h-full">
-            <p style={{ color: 'var(--color-text-muted)' }}>Select an entry to view details</p>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              flexDirection: 'column',
+              gap: 12,
+            }}
+          >
+            <div style={{ opacity: 0.1 }}>
+              <Icon name="globe" size={48} strokeWidth={1} />
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+              Select an entry to view details
+            </p>
           </div>
         )}
       </div>

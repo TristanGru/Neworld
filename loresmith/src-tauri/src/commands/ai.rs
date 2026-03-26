@@ -1,4 +1,4 @@
-use tauri::{State, AppHandle, Emitter};
+use tauri::{State, AppHandle, Emitter, Manager};
 use serde::{Deserialize, Serialize};
 
 use crate::errors::LoreError;
@@ -227,6 +227,15 @@ pub async fn get_ai_suggestions(
     Ok(suggestions)
 }
 
+/// Path to the persistent settings file in app data directory
+fn settings_path(app_handle: &AppHandle) -> std::path::PathBuf {
+    app_handle
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| std::env::temp_dir())
+        .join("neworld_settings.json")
+}
+
 #[tauri::command]
 pub async fn set_ollama_model(
     model: String,
@@ -235,6 +244,73 @@ pub async fn set_ollama_model(
     let mut m = state.ollama_model.lock().unwrap();
     *m = model;
     Ok(())
+}
+
+#[derive(Serialize)]
+pub struct AiSettings {
+    pub current_model: String,
+    pub available_models: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn get_ai_settings(
+    state: State<'_, AppState>,
+) -> Result<AiSettings, LoreError> {
+    let current_model = state.ollama_model.lock().unwrap().clone();
+    let embed_model = state.ollama_embedding_model.clone();
+
+    // Fetch all installed models and exclude the embedding model (not useful for chat)
+    let available_models = ollama::check_health(&state.ollama_base_url)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|m| !m.starts_with(&embed_model))
+        .collect();
+
+    Ok(AiSettings { current_model, available_models })
+}
+
+#[tauri::command]
+pub async fn save_ai_model(
+    model: String,
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), LoreError> {
+    // Update in-memory state
+    {
+        let mut m = state.ollama_model.lock().unwrap();
+        *m = model.clone();
+    }
+
+    // Persist to settings file
+    let path = settings_path(&app_handle);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    let settings = serde_json::json!({ "ollama_model": model });
+    std::fs::write(&path, serde_json::to_string_pretty(&settings).unwrap_or_default())
+        .map_err(|e| LoreError::IoError(e.to_string()))?;
+
+    Ok(())
+}
+
+/// Load persisted settings into AppState — called from the Tauri setup hook.
+pub fn load_persisted_settings(app: &tauri::App) {
+    let path = app
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| std::env::temp_dir())
+        .join("neworld_settings.json");
+
+    if let Ok(contents) = std::fs::read_to_string(&path) {
+        if let Ok(settings) = serde_json::from_str::<serde_json::Value>(&contents) {
+            if let Some(model) = settings.get("ollama_model").and_then(|v| v.as_str()) {
+                let state = app.state::<crate::state::AppState>();
+                let mut m = state.ollama_model.lock().unwrap();
+                *m = model.to_string();
+            }
+        }
+    }
 }
 
 #[tauri::command]

@@ -8,6 +8,25 @@ import { open } from '@tauri-apps/plugin-dialog';
 
 const GENRES: Genre[] = ['fantasy', 'sci-fi', 'horror', 'romance', 'mystery', 'historical', 'contemporary', 'custom'];
 
+// Subtle wordmark SVG — pen crossing a globe ring
+function Wordmark() {
+  return (
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <circle cx="24" cy="24" r="18" stroke="var(--color-primary)" strokeWidth="1.5" opacity="0.35" />
+      <ellipse cx="24" cy="24" rx="10" ry="18" stroke="var(--color-primary)" strokeWidth="1.5" opacity="0.25" />
+      <line x1="6" y1="24" x2="42" y2="24" stroke="var(--color-primary)" strokeWidth="1.5" opacity="0.2" />
+      <path
+        d="M30 14l3 3-12 12-4 1 1-4z"
+        stroke="var(--color-primary)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
 export default function HomeScreen() {
   const recentProjects = useProjectStore((s) => s.recentProjects);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
@@ -25,36 +44,26 @@ export default function HomeScreen() {
   async function pickFolder() {
     try {
       const selected = await open({ directory: true, multiple: false });
-      if (selected) {
-        setWizardPath(selected as string);
-      }
+      if (selected) setWizardPath(selected as string);
     } catch (e) {
-      // fallback for dev: user types path manually
+      // fallback: user types path manually
     }
   }
 
   async function handleCreate() {
-    if (!wizardName.trim()) {
-      addToast('Please enter a project name', 'error');
-      return;
-    }
-    if (!wizardPath) {
-      addToast('Please select a save location', 'error');
-      return;
-    }
+    if (!wizardName.trim()) { addToast('Please enter a project name', 'error'); return; }
+    if (!wizardPath) { addToast('Please select a save location', 'error'); return; }
     setCreating(true);
     try {
       const result = await ipc.createProject(wizardName.trim(), wizardGenre, wizardPath);
       await ipc.addRecentProject(result.id, result.name, result.folder_path, wizardGenre);
-
       const openResult = await ipc.openProject(result.folder_path);
       const cats = await ipc.getEntityCategories(result.id);
-
       setActiveProject(openResult.project, result.folder_path);
       setChapters(openResult.chapters);
       setEntityCategories(cats);
       setView('chapters');
-      addToast(`Project "${result.name}" created!`, 'success');
+      addToast(`"${result.name}" created`, 'success');
     } catch (e: any) {
       addToast(`Failed to create project: ${e?.message ?? e}`, 'error');
     } finally {
@@ -66,20 +75,16 @@ export default function HomeScreen() {
     try {
       const path = folderPath ?? await open({ directory: true, multiple: false }) as string;
       if (!path) return;
-
       const result = await ipc.openProject(path);
       const cats = await ipc.getEntityCategories(result.project.id);
       const entities = await ipc.getEntities(result.project.id);
       const rels = await ipc.getRelationships(result.project.id);
-
       setActiveProject(result.project, path);
       setChapters(result.chapters);
       setEntityCategories(cats);
-
       const { setEntities, setRelationships } = useProjectStore.getState();
       setEntities(entities);
       setRelationships(rels);
-
       await ipc.addRecentProject(result.project.id, result.project.name, path, result.project.genre);
       setView('chapters');
       addToast(`Opened "${result.project.name}"`, 'success');
@@ -89,35 +94,97 @@ export default function HomeScreen() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-8"
-      style={{ background: 'var(--color-bg)' }}>
-
+    <div
+      style={{
+        minHeight: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '48px 32px',
+        background: 'var(--color-bg)',
+      }}
+    >
       {/* Hero */}
-      <div className="text-center mb-12">
-        <div className="text-6xl mb-4">📖</div>
-        <h1 className="text-5xl font-bold mb-3" style={{ color: 'var(--color-text)' }}>
+      <div style={{ textAlign: 'center', marginBottom: 48 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
+          <Wordmark />
+        </div>
+        <h1
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 42,
+            fontWeight: 700,
+            letterSpacing: '-0.03em',
+            color: 'var(--color-text)',
+            margin: 0,
+            lineHeight: 1.1,
+          }}
+        >
           Neworld
         </h1>
-        <p className="text-lg" style={{ color: 'var(--color-text-muted)' }}>
-          Local-first novel writing and world-building
+        <p
+          style={{
+            marginTop: 10,
+            fontSize: 14,
+            color: 'var(--color-text-muted)',
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            fontWeight: 500,
+          }}
+        >
+          Novel writing &amp; world-building
         </p>
       </div>
 
       {/* Actions */}
-      <div className="flex gap-4 mb-12">
+      <div style={{ display: 'flex', gap: 10, marginBottom: 48 }}>
         <button
           onClick={() => setShowWizard(true)}
-          className="px-6 py-3 rounded-lg font-semibold text-white transition-colors"
-          style={{ background: 'var(--color-primary)' }}
-          onMouseOver={(e) => (e.currentTarget.style.background = 'var(--color-primary-hover)')}
-          onMouseOut={(e) => (e.currentTarget.style.background = 'var(--color-primary)')}
+          style={{
+            padding: '10px 22px',
+            borderRadius: 8,
+            fontWeight: 600,
+            fontSize: 13,
+            color: 'var(--color-bg)',
+            background: 'var(--color-primary)',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'background 120ms ease, transform 100ms ease',
+            letterSpacing: '0.01em',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'var(--color-primary-hover)';
+            e.currentTarget.style.transform = 'translateY(-1px)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'var(--color-primary)';
+            e.currentTarget.style.transform = 'translateY(0)';
+          }}
         >
-          + New Project
+          New Project
         </button>
         <button
           onClick={() => openProject()}
-          className="px-6 py-3 rounded-lg font-semibold transition-colors"
-          style={{ background: 'var(--color-bg-panel)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
+          style={{
+            padding: '10px 22px',
+            borderRadius: 8,
+            fontWeight: 500,
+            fontSize: 13,
+            color: 'var(--color-text-muted)',
+            background: 'transparent',
+            border: '1px solid var(--color-border)',
+            cursor: 'pointer',
+            transition: 'color 120ms ease, border-color 120ms ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = 'var(--color-text)';
+            e.currentTarget.style.borderColor = 'var(--color-border-strong)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = 'var(--color-text-muted)';
+            e.currentTarget.style.borderColor = 'var(--color-border)';
+          }}
         >
           Open Folder
         </button>
@@ -125,26 +192,93 @@ export default function HomeScreen() {
 
       {/* Recent Projects */}
       {recentProjects.length > 0 && (
-        <div className="w-full max-w-2xl">
-          <h2 className="text-sm font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--color-text-muted)' }}>
-            Recent Projects
-          </h2>
-          <div className="space-y-2">
+        <div style={{ width: '100%', maxWidth: 520 }}>
+          <p
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: 'var(--color-text-subtle)',
+              marginBottom: 10,
+              paddingLeft: 2,
+            }}
+          >
+            Recent
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {recentProjects.map((rp) => (
               <button
                 key={rp.id}
                 onClick={() => openProject(rp.folder_path)}
-                className="w-full flex items-center gap-4 p-4 rounded-lg text-left transition-colors"
-                style={{ background: 'var(--color-bg-panel)', border: '1px solid var(--color-border)' }}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 14,
+                  padding: '12px 16px',
+                  borderRadius: 10,
+                  textAlign: 'left',
+                  background: 'var(--color-bg-panel)',
+                  border: '1px solid var(--color-border)',
+                  cursor: 'pointer',
+                  transition: 'border-color 120ms ease, background 120ms ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--color-border-strong)';
+                  e.currentTarget.style.background = 'var(--color-bg-elevated)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--color-border)';
+                  e.currentTarget.style.background = 'var(--color-bg-panel)';
+                }}
               >
-                <span className="text-2xl">{genreIcon(rp.genre)}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold truncate" style={{ color: 'var(--color-text)' }}>{rp.name}</div>
-                  <div className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
-                    {genreLabel(rp.genre)} · {rp.folder_path}
+                {/* Genre icon badge */}
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 8,
+                    background: 'var(--color-bg-elevated)',
+                    border: '1px solid var(--color-border-strong)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 18,
+                    flexShrink: 0,
+                  }}
+                >
+                  {genreIcon(rp.genre)}
+                </div>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      fontSize: 13,
+                      color: 'var(--color-text)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {rp.name}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--color-text-muted)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      marginTop: 2,
+                    }}
+                  >
+                    {genreLabel(rp.genre)}
                   </div>
                 </div>
-                <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+
+                <div style={{ fontSize: 11, color: 'var(--color-text-subtle)', flexShrink: 0 }}>
                   {formatDate(rp.opened_at)}
                 </div>
               </button>
@@ -153,97 +287,189 @@ export default function HomeScreen() {
         </div>
       )}
 
-      {/* New Project Wizard Modal */}
+      {/* ── New Project Wizard Modal ── */}
       {showWizard && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-lg rounded-xl p-6 space-y-5"
-            style={{ background: 'var(--color-bg-panel)', border: '1px solid var(--color-border)' }}>
-            <h2 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>New Project</h2>
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 460,
+              borderRadius: 14,
+              padding: '28px 28px 24px',
+              background: 'var(--color-bg-elevated)',
+              border: '1px solid var(--color-border-strong)',
+              boxShadow: 'var(--shadow-lg)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 20,
+            }}
+          >
+            <h2
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 20,
+                fontWeight: 600,
+                color: 'var(--color-text)',
+                margin: 0,
+                letterSpacing: '-0.02em',
+              }}
+            >
+              New Project
+            </h2>
 
+            {/* Project Name */}
             <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)', marginBottom: 6 }}>
                 Project Name
               </label>
               <input
                 value={wizardName}
                 onChange={(e) => setWizardName(e.target.value)}
                 placeholder="e.g. Ember Rising"
-                className="w-full px-3 py-2 rounded-lg text-sm"
+                autoFocus
                 style={{
-                  background: 'var(--color-bg)',
-                  border: '1px solid var(--color-border)',
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  background: 'var(--color-bg-input)',
+                  border: '1px solid var(--color-border-strong)',
                   color: 'var(--color-text)',
                   outline: 'none',
+                  transition: 'border-color 120ms ease',
                 }}
-                autoFocus
+                onFocus={(e) => (e.currentTarget.style.borderColor = 'rgba(201,145,58,0.4)')}
+                onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--color-border-strong)')}
               />
             </div>
 
+            {/* Genre picker */}
             <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-muted)' }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)', marginBottom: 8 }}>
                 Genre
               </label>
-              <div className="grid grid-cols-4 gap-2">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
                 {GENRES.map((g) => (
                   <button
                     key={g}
                     onClick={() => setWizardGenre(g)}
-                    className="flex flex-col items-center gap-1 p-3 rounded-lg text-xs font-medium transition-all"
                     style={{
-                      background: wizardGenre === g ? 'var(--color-primary)' : 'var(--color-bg)',
-                      border: `1px solid ${wizardGenre === g ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                      color: wizardGenre === g ? 'white' : 'var(--color-text)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '10px 4px',
+                      borderRadius: 8,
+                      fontSize: 11,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      transition: 'all 120ms ease',
+                      background: wizardGenre === g ? 'var(--color-primary-dim)' : 'var(--color-bg-input)',
+                      border: `1px solid ${wizardGenre === g ? 'rgba(201,145,58,0.35)' : 'var(--color-border)'}`,
+                      color: wizardGenre === g ? 'var(--color-primary)' : 'var(--color-text-muted)',
                     }}
                   >
-                    <span className="text-xl">{genreIcon(g)}</span>
+                    <span style={{ fontSize: 18 }}>{genreIcon(g)}</span>
                     <span>{genreLabel(g)}</span>
                   </button>
                 ))}
               </div>
             </div>
 
+            {/* Save location */}
             <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)', marginBottom: 6 }}>
                 Save Location
               </label>
-              <div className="flex gap-2">
+              <div style={{ display: 'flex', gap: 8 }}>
                 <input
                   value={wizardPath}
                   onChange={(e) => setWizardPath(e.target.value)}
                   placeholder="Choose a folder..."
-                  className="flex-1 px-3 py-2 rounded-lg text-sm"
                   style={{
-                    background: 'var(--color-bg)',
-                    border: '1px solid var(--color-border)',
+                    flex: 1,
+                    padding: '9px 12px',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    background: 'var(--color-bg-input)',
+                    border: '1px solid var(--color-border-strong)',
                     color: 'var(--color-text)',
                     outline: 'none',
+                    transition: 'border-color 120ms ease',
                   }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = 'rgba(201,145,58,0.4)')}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--color-border-strong)')}
                 />
                 <button
                   onClick={pickFolder}
-                  className="px-3 py-2 rounded-lg text-sm"
-                  style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                  style={{
+                    padding: '9px 14px',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    background: 'var(--color-bg-input)',
+                    border: '1px solid var(--color-border-strong)',
+                    color: 'var(--color-text-muted)',
+                    cursor: 'pointer',
+                    transition: 'color 120ms ease',
+                    whiteSpace: 'nowrap',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
                 >
                   Browse
                 </button>
               </div>
             </div>
 
-            <div className="flex gap-3 justify-end pt-2">
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
               <button
                 onClick={() => setShowWizard(false)}
-                className="px-4 py-2 rounded-lg text-sm"
-                style={{ color: 'var(--color-text-muted)' }}
+                style={{
+                  padding: '9px 16px',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--color-text-muted)',
+                  cursor: 'pointer',
+                  transition: 'color 120ms ease',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text)')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreate}
                 disabled={creating}
-                className="px-5 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
-                style={{ background: 'var(--color-primary)' }}
+                style={{
+                  padding: '9px 20px',
+                  borderRadius: 8,
+                  fontWeight: 600,
+                  fontSize: 13,
+                  color: 'var(--color-bg)',
+                  background: 'var(--color-primary)',
+                  border: 'none',
+                  cursor: creating ? 'not-allowed' : 'pointer',
+                  opacity: creating ? 0.6 : 1,
+                  transition: 'background 120ms ease',
+                }}
+                onMouseEnter={(e) => { if (!creating) e.currentTarget.style.background = 'var(--color-primary-hover)'; }}
+                onMouseLeave={(e) => { if (!creating) e.currentTarget.style.background = 'var(--color-primary)'; }}
               >
-                {creating ? 'Creating...' : 'Create Project'}
+                {creating ? 'Creating…' : 'Create Project'}
               </button>
             </div>
           </div>

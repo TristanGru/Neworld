@@ -1,6 +1,6 @@
 [package]
 name = "neworld"
-version = "0.1.0"
+version = "0.2.0"
 description = "Neworld — local-first novel writing and world-building"
 authors = ["you"]
 edition = "2021"

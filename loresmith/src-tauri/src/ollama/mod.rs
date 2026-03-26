@@ -85,6 +85,7 @@ struct ChatRequest {
     model: String,
     messages: Vec<ChatMessage>,
     stream: bool,
+    keep_alive: i64,
 }
 
 #[derive(Deserialize)]
@@ -103,6 +104,7 @@ struct GenerateRequest {
     model: String,
     prompt: String,
     stream: bool,
+    keep_alive: i64,
 }
 
 #[derive(Deserialize)]
@@ -115,6 +117,7 @@ struct GenerateChunk {
 struct EmbedRequest {
     model: String,
     prompt: String,
+    keep_alive: i64,
 }
 
 #[derive(Deserialize)]
@@ -158,6 +161,7 @@ pub async fn embed_text(base_url: &str, model: &str, text: &str) -> Result<Vec<f
     let req = EmbedRequest {
         model: model.to_string(),
         prompt: text.to_string(),
+        keep_alive: -1,
     };
 
     let resp = client.post(&url).json(&req).send().await
@@ -184,6 +188,7 @@ pub async fn generate_completion(
         model: model.to_string(),
         prompt: prompt.to_string(),
         stream: false,
+        keep_alive: -1,
     };
 
     let resp = client.post(&url).json(&req).send().await
@@ -213,7 +218,7 @@ pub async fn stream_chat(
         .map_err(|_| LoreError::OllamaUnreachable)?;
 
     let url = format!("{}/api/chat", base_url);
-    let req = ChatRequest { model: model.to_string(), messages, stream: true };
+    let req = ChatRequest { model: model.to_string(), messages, stream: true, keep_alive: -1 };
 
     let resp = client.post(&url).json(&req).send().await
         .map_err(|_| LoreError::OllamaUnreachable)?;
@@ -261,6 +266,7 @@ pub async fn stream_completion(
         model: model.to_string(),
         prompt: prompt.to_string(),
         stream: true,
+        keep_alive: -1,
     };
 
     let resp = client.post(&url).json(&req).send().await

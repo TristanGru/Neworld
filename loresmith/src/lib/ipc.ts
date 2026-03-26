@@ -108,6 +108,12 @@ export const ipc = {
   setOllamaModel: (model: string) =>
     invoke<void>('set_ollama_model', { model }),
 
+  getAiSettings: () =>
+    invoke<{ current_model: string; available_models: string[] }>('get_ai_settings'),
+
+  saveAiModel: (model: string) =>
+    invoke<void>('save_ai_model', { model }),
+
   detectEntities: (project_id: string, prose: string) =>
     invoke<EntityMatch[]>('detect_entities_in_prose', { projectId: project_id, prose }),
 

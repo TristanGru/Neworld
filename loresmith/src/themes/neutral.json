@@ -1,15 +1,26 @@
 {
-  "--color-primary": "#3b82f6",
-  "--color-primary-hover": "#2563eb",
-  "--color-secondary": "#93c5fd",
-  "--color-accent": "#f59e0b",
-  "--color-bg": "#0f172a",
-  "--color-bg-panel": "#1e293b",
-  "--color-bg-sidebar": "#162032",
-  "--color-border": "#334155",
-  "--color-text": "#e2e8f0",
-  "--color-text-muted": "#94a3b8",
-  "--color-entity-mark": "#60a5fa",
-  "--font-prose": "Georgia, 'Times New Roman', serif",
-  "--font-ui": "'Segoe UI', system-ui, sans-serif"
+  "--color-primary":        "#c9913a",
+  "--color-primary-hover":  "#b8822e",
+  "--color-primary-dim":    "rgba(201, 145, 58, 0.12)",
+  "--color-primary-muted":  "rgba(201, 145, 58, 0.06)",
+
+  "--color-bg":             "#0c0a07",
+  "--color-bg-panel":       "#161310",
+  "--color-bg-sidebar":     "#0f0d0a",
+  "--color-bg-elevated":    "#1e1a14",
+  "--color-bg-input":       "#131109",
+
+  "--color-border":         "#23201a",
+  "--color-border-strong":  "#352d24",
+
+  "--color-text":           "#ddd1bf",
+  "--color-text-muted":     "#6d6050",
+  "--color-text-subtle":    "#342e26",
+
+  "--color-accent":         "#c05040",
+  "--color-entity-mark":    "#c9913a",
+
+  "--font-display": "Georgia, 'Palatino Linotype', serif",
+  "--font-prose":   "Georgia, 'Times New Roman', serif",
+  "--font-ui":      "'Segoe UI Variable Display', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif"
 }

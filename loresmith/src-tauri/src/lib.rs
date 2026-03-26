@@ -18,6 +18,11 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .manage(AppState::new())
+        .setup(|app| {
+            // Load the user's previously chosen AI model before the UI starts
+            commands::ai::load_persisted_settings(app);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             // Project
             create_project,
@@ -56,6 +61,8 @@ pub fn run() {
             ai_query,
             get_ai_suggestions,
             set_ollama_model,
+            get_ai_settings,
+            save_ai_model,
             detect_entities_in_prose,
             analyze_and_import,
             // Export
