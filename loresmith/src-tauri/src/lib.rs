@@ -51,6 +51,7 @@ pub fn run() {
             get_version_snapshots,
             restore_snapshot,
             // AI
+            setup_models,
             check_ollama,
             ai_query,
             get_ai_suggestions,

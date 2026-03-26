@@ -13,6 +13,47 @@ pub struct OllamaStatus {
 }
 
 #[tauri::command]
+pub async fn setup_models(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), LoreError> {
+    let base_url = state.ollama_base_url.clone();
+    let model = state.ollama_model.lock().unwrap().clone();
+    let embed_model = state.ollama_embedding_model.clone();
+
+    // Ollama may have just been installed — wait up to 60s for it to start
+    let mut attempts = 0;
+    let models = loop {
+        match ollama::check_health(&base_url).await {
+            Ok(m) => break m,
+            Err(_) => {
+                attempts += 1;
+                if attempts >= 12 {
+                    return Err(LoreError::OllamaUnreachable);
+                }
+                let _ = app_handle.emit("setup_progress", serde_json::json!({
+                    "model": "", "status": "waiting_for_ollama", "percent": 0.0
+                }));
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+        }
+    };
+
+    let main_needed = !models.iter().any(|m| m.starts_with(&model));
+    let embed_needed = !models.iter().any(|m| m.starts_with(&embed_model));
+
+    if main_needed {
+        ollama::pull_model(&base_url, &model, &app_handle).await?;
+    }
+    if embed_needed {
+        ollama::pull_model(&base_url, &embed_model, &app_handle).await?;
+    }
+
+    let _ = app_handle.emit("setup_complete", ());
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn check_ollama(
     state: State<'_, AppState>,
 ) -> Result<OllamaStatus, LoreError> {

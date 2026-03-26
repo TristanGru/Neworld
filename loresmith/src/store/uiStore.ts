@@ -7,6 +7,12 @@ interface Toast {
   type: 'info' | 'success' | 'error' | 'warning';
 }
 
+export interface SetupProgress {
+  model: string;
+  status: string;
+  percent: number;
+}
+
 interface UIState {
   currentView: View;
   activeChapterId: string | null;
@@ -16,6 +22,8 @@ interface UIState {
   ollamaAvailable: boolean;
   showTutorial: boolean;
   toasts: Toast[];
+  setupComplete: boolean;
+  setupProgress: SetupProgress | null;
 
   setView: (view: View) => void;
   setActiveChapter: (id: string | null) => void;
@@ -24,6 +32,8 @@ interface UIState {
   setEntityPanelOpen: (open: boolean) => void;
   setOllamaAvailable: (available: boolean) => void;
   setShowTutorial: (show: boolean) => void;
+  setSetupComplete: (complete: boolean) => void;
+  setSetupProgress: (progress: SetupProgress | null) => void;
   addToast: (message: string, type?: Toast['type']) => void;
   removeToast: (id: string) => void;
 }
@@ -39,6 +49,8 @@ export const useUIStore = create<UIState>((set) => ({
   ollamaAvailable: false,
   showTutorial: !localStorage.getItem(TUTORIAL_KEY),
   toasts: [],
+  setupComplete: false,
+  setupProgress: null,
 
   setView: (view) => set({ currentView: view }),
   setActiveChapter: (id) => set({ activeChapterId: id }),
@@ -50,6 +62,8 @@ export const useUIStore = create<UIState>((set) => ({
     if (!show) localStorage.setItem(TUTORIAL_KEY, '1');
     set({ showTutorial: show });
   },
+  setSetupComplete: (complete) => set({ setupComplete: complete }),
+  setSetupProgress: (progress) => set({ setupProgress: progress }),
 
   addToast: (message, type = 'info') => {
     const id = Math.random().toString(36).slice(2);

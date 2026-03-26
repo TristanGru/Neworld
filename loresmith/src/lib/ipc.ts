@@ -93,6 +93,9 @@ export const ipc = {
     invoke<{ content: string }>('restore_snapshot', { snapshotId: snapshot_id }),
 
   // AI commands
+  setupModels: () =>
+    invoke<void>('setup_models'),
+
   checkOllama: () =>
     invoke<{ available: boolean; models: string[] }>('check_ollama'),
 

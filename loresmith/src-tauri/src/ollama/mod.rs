@@ -4,6 +4,76 @@ use tauri::{AppHandle, Emitter};
 
 use crate::errors::LoreError;
 
+#[derive(Clone, Serialize)]
+pub struct SetupProgress {
+    pub model: String,
+    pub status: String,
+    pub percent: f32,
+}
+
+#[derive(Serialize)]
+struct PullRequest {
+    name: String,
+}
+
+#[derive(Deserialize)]
+struct PullChunk {
+    status: Option<String>,
+    total: Option<u64>,
+    completed: Option<u64>,
+}
+
+pub async fn pull_model(
+    base_url: &str,
+    model: &str,
+    app_handle: &AppHandle,
+) -> Result<(), LoreError> {
+    use futures_util::StreamExt;
+
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(7200))
+        .build()
+        .map_err(|_| LoreError::OllamaUnreachable)?;
+
+    let url = format!("{}/api/pull", base_url);
+    let req = PullRequest { name: model.to_string() };
+
+    let resp = client.post(&url).json(&req).send().await
+        .map_err(|_| LoreError::OllamaUnreachable)?;
+
+    let mut stream = resp.bytes_stream();
+
+    while let Some(chunk) = stream.next().await {
+        let bytes = chunk.map_err(|e| LoreError::IoError(e.to_string()))?;
+        let text = String::from_utf8_lossy(&bytes);
+
+        for line in text.lines() {
+            if line.trim().is_empty() { continue; }
+            if let Ok(data) = serde_json::from_str::<PullChunk>(line) {
+                let status = data.status.unwrap_or_default();
+                let percent = match (data.total, data.completed) {
+                    (Some(total), Some(completed)) if total > 0 => {
+                        (completed as f32 / total as f32) * 100.0
+                    }
+                    _ => 0.0,
+                };
+
+                let _ = app_handle.emit("setup_progress", SetupProgress {
+                    model: model.to_string(),
+                    status: status.clone(),
+                    percent,
+                });
+
+                if status == "success" {
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[derive(Serialize)]
 struct GenerateRequest {
     model: String,
