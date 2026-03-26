@@ -13,8 +13,8 @@
     DetailPrint "Downloading Ollama..."
     SetDetailsPrint both
 
-    ; Download Ollama installer via PowerShell
-    nsExec::ExecToLog 'powershell.exe -NoProfile -NonInteractive -Command "Invoke-WebRequest -Uri https://ollama.com/download/OllamaSetup.exe -OutFile \"$TEMP\OllamaSetup.exe\" -UseBasicParsing"'
+    ; Download Ollama installer via curl (built into Windows 10/11, no progress-bar slowdown)
+    nsExec::ExecToLog 'curl.exe -L --silent --show-error -o "$TEMP\OllamaSetup.exe" "https://ollama.com/download/OllamaSetup.exe"'
     Pop $0
     ${If} $0 != 0
       MessageBox MB_OK|MB_ICONEXCLAMATION "Ollama download failed. You can install it manually from https://ollama.com — Neworld requires it for AI features."
